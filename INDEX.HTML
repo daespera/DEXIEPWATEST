@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dexie Offline PWA</title>
+  <link id="manifest-link" rel="manifest">
+  <script src="https://unpkg.com"></script>
+
+  <style>
+    body { font-family: sans-serif; max-width: 500px; margin: 20px auto; padding: 0 15px; background: #f3f4f6; }
+    .status-bar { padding: 10px; border-radius: 6px; text-align: center; margin-bottom: 15px; font-weight: bold; }
+    .online { background: #d1fae5; color: #065f46; }
+    .offline { background: #fee2e2; color: #991b1b; }
+    .input-group { display: flex; gap: 10px; margin-bottom: 15px; }
+    input { flex: 1; padding: 12px; border: 1px solid #d1d5db; border-radius: 6px; }
+    button { padding: 12px; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; }
+    li { background: white; padding: 14px; margin-bottom: 8px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; }
+    .completed { text-decoration: line-through; color: #9ca3af; }
+    .sync-badge { font-size: 11px; padding: 2px 6px; background: #fef3c7; color: #92400e; border-radius: 4px; }
+    .action-group { display: flex; gap: 6px; }
+  </style>
+</head>
+<body>
+
+  <h1>Task Manager PWA</h1>
+  <div id="status" class="status-bar online">Checking connection...</div>
+
+  <div class="input-group">
+    <input type="text" id="task-input" placeholder="Add a new task...">
+    <button id="add-btn">Add Task</button>
+  </div>
+
+  <ul id="task-list"></ul>
+
+  <script>
+    // ==========================================
+    // 1. GENERATE PWA FILES IN MEMORY
+    // ==========================================
+    const manifestJson = {
+      name: "Dexie Sync App", short_name: "DexieSync", start_url: ".", display: "standalone",
+      background_color: "#f3f4f6", theme_color: "#2563eb",
+      icons: [{ src: "data:image/svg+xml;utf8,<svg xmlns='http://w3.org' width='192' height='192'><circle cx='96' cy='96' r='80' fill='%232563eb'/></svg>", sizes: "192x192", type: "image/svg+xml" }]
+    };
+    document.getElementById('manifest-link').href = URL.createObjectURL(new Blob([JSON.stringify(manifestJson)], { type: 'application/json' }));
+
+    const swCode = `
+      self.addEventListener('install', e => e.waitUntil(caches.open('v1').then(c => c.addAll(['/', '/index.html', 'https://unpkg.com']))));
+      self.addEventListener('fetch', e => {
+        if (!e.request.url.includes('jsonplaceholder')) {
+          e.respondWith(caches.match(e.request).then(res => res || fetch(e.request)));
+        }
+      });
+    `;
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register(URL.createObjectURL(new Blob([swCode], { type: 'application/javascript' })));
+
+    // ==========================================
+    // 2. DEXIE DATABASE SETUP
+    // ==========================================
+    const db = new Dexie('PwaSyncMasterDB');
+    db.version(1).stores({ tasks: 'id, title, completed', outbox: 'id, action, payload' });
+
+    const listElement = document.getElementById('task-list');
+    const statusElement = document.getElementById('status');
+    const taskInput = document.getElementById('task-input');
+    const addButton = document.getElementById('add-btn');
+
+    // ==========================================
+    // 3. ACTIONS (ADD / TOGGLE / DELETE)
+    // ==========================================
+    async function handleAddTask() {
+      if (!taskInput.value.trim()) return;
+      const newTask = { id: crypto.randomUUID(), title: taskInput.value.trim(), completed: false };
+      await db.transaction('rw', [db.tasks, db.outbox], async () => {
+        await db.tasks.add(newTask);
+        await db.outbox.add({ id: newTask.id, action: 'CREATE', payload: newTask });
+      });
+      taskInput.value = '';
+      await refreshUI();
+      triggerSync();
+    }
+
+    async function handleToggleTask(id) {
+      const task = await db.tasks.get(id);
+      if (!task) return;
+      await db.transaction('rw', [db.tasks, db.outbox], async () => {
+        await db.tasks.update(id, { completed: !task.completed });
+        await db.outbox.put({ id, action: 'UPDATE', payload: { id, completed: !task.completed } });
+      });
+      await refreshUI();
+      triggerSync();
+    }
+
+    async function handleDeleteTask(id) {
+      await db.transaction('rw', [db.tasks, db.outbox], async () => {
+        await db.tasks.delete(id);
+        await db.outbox.put({ id, action: 'DELETE', payload: { id } });
+      });
+      await refreshUI();
+      triggerSync();
+    }
+
+    // ==========================================
+    // 4. AUTOMATIC BACKEND SYNC (YOUR SNIPPET LIVES HERE!)
+    // ==========================================
+    async function triggerSync() {
+      if (!navigator.onLine) return;
+
+      const pendingChanges = await db.outbox.toArray();
+      if (pendingChanges.length === 0) return;
+
+      statusElement.textContent = `🔄 Syncing ${pendingChanges.length} local edits to backend...`;
+
+      for (const change of pendingChanges) {
+        try {
+          let url = 'https://typicode.com';
+          let method = 'POST';
+
+          if (change.action === 'UPDATE') {
+            url = 'https://typicode.com/1'; 
+            method = 'PUT';
+          } else if (change.action === 'DELETE') {
+            url = 'https://typicode.com/1'; 
+            method = 'DELETE';
+          }
+
+          const response = await fetch(url, {
+            method: method,
+            headers: { 'Content-Type': 'application/json' },
+            body: change.action === 'DELETE' ? null : JSON.stringify(change.payload)
+          });
+
+          if (response.ok) {
+            await db.outbox.delete(change.id);
+          }
+        } catch (err) {
+          console.error("Sync transmission temporarily halted for target ID:", change.id, err);
+          break; 
+        }
+      }
+
+      await refreshUI();
+      updateNetworkStatus();
+    }
+
+    // ==========================================
+    // 5. USER INTERFACE & LIFECYCLE
+    // ==========================================
+    async function refreshUI() {
+      const allTasks = await db.tasks.toArray();
+      const outboxItems = await db.outbox.toArray();
+      const actionMap = new Map(outboxItems.map(item => [item.id, item.action]));
+
+      if (allTasks.length === 0) {
+        listElement.innerHTML = `<li>No active records listed. Create one above!</li>`;
+        return;
+      }
+
+      listElement.innerHTML = allTasks.map(task => {
+        const pendingAction = actionMap.get(task.id);
+        return `
+          <li>
+            <div>
+              <span class="${task.completed ? 'completed' : ''}">${task.title}</span>
+              ${pendingAction ? `<br><span class="sync-badge">⏳ Outbox: ${pendingAction}</span>` : ''}
+            </div>
+            <div class="action-group">
+              <button style="background:#10b981;" onclick="handleToggleTask('${task.id}')">${task.completed ? 'Undo' : 'Done'}</button>
+              <button style="background:#ef4444;" onclick="handleDeleteTask('${task.id}')">Delete</button>
+            </div>
+          </li>
+        `;
+      }).join('');
+    }
+
+    function updateNetworkStatus() {
+      if (navigator.onLine) {
+        statusElement.textContent = "🟢 Device Connected (Live Synchronizer Running)";
+        statusElement.className = "status-bar online";
+        triggerSync();
+      } else {
+        statusElement.textContent = "🔴 Device Offline (Dexie Queues Active)";
+        statusElement.className = "status-bar offline";
+      }
+    }
+
+    async function seedInitialData() {
+      if (await db.tasks.count() === 0 && navigator.onLine) {
+        try {
+          const res = await fetch('https://typicode.com?_limit=3');
+          const data = await res.json();
+          await db.tasks.bulkPut(data.map(item => ({ id: crypto.randomUUID(), title: item.title, completed: item.completed })));
+          await refreshUI();
+        } catch (e) { console.warn("Seed fetch fallback blocked:", e); }
+      }
+    }
+
+    window.addEventListener('online', updateNetworkStatus);
+    window.addEventListener('offline', updateNetworkStatus);
+    addButton.addEventListener('click', handleAddTask);
+
+    updateNetworkStatus();
+    seedInitialData().then(refreshUI);
+  </script>
+</body>
+</html>
