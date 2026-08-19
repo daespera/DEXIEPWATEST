@@ -4,9 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
   <title>Dexie · PWA Sync</title>
-  <link rel="manifest" href="manifest.json">
-  <!-- Dexie from CDN -->
-  <script src="https://unpkg.com/dexie@4.0.8/dist/dexie.js"></script>
+  <!-- Dexie from CDN - using a reliable version -->
+  <script src="https://cdn.jsdelivr.net/npm/dexie@4.0.8/dist/dexie.min.js"></script>
   <style>
     * {
       box-sizing: border-box;
@@ -223,346 +222,351 @@
 
   <script>
     // ============================================================
-    // Wait for Dexie to load
+    // Wait for Dexie to load (with retry)
     // ============================================================
-    function waitForDexie() {
-      return new Promise((resolve) => {
-        if (typeof Dexie !== 'undefined') {
-          resolve();
-        } else {
-          const checkInterval = setInterval(() => {
-            if (typeof Dexie !== 'undefined') {
-              clearInterval(checkInterval);
-              resolve();
-            }
-          }, 100);
-        }
+    function waitForDexie(retries = 10) {
+      return new Promise((resolve, reject) => {
+        let attempts = 0;
+        const checkDexie = () => {
+          attempts++;
+          if (typeof Dexie !== 'undefined') {
+            resolve();
+          } else if (attempts >= retries) {
+            reject(new Error('Dexie failed to load after ' + retries + ' attempts'));
+          } else {
+            setTimeout(checkDexie, 500);
+          }
+        };
+        checkDexie();
       });
     }
 
+    // Main app - wrapped in try/catch for better error handling
     (async function main() {
-      // Wait for Dexie to be available
-      await waitForDexie();
+      try {
+        // Wait for Dexie to be available
+        await waitForDexie(15);
+        console.log('✅ Dexie loaded successfully');
 
-      // ============================================================
-      // 1.  PWA manifest (using relative path for GitHub Pages)
-      // ============================================================
-      // Create manifest dynamically as a data URI (works on GitHub Pages)
-      const manifest = {
-        name: "Dexie PWA Sync",
-        short_name: "DexieSync",
-        start_url: ".",
-        display: "standalone",
-        background_color: "#f8fafc",
-        theme_color: "#2563eb",
-        icons: [
-          {
-            src: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><circle cx='96' cy='96' r='80' fill='%232563eb'/><text x='96' y='120' font-size='70' text-anchor='middle' fill='white' font-family='sans-serif'>📋</text></svg>",
-            sizes: "192x192",
-            type: "image/svg+xml"
-          }
-        ]
-      };
-      
-      // Use a data URI for the manifest (works on GitHub Pages)
-      const manifestDataUri = 'data:application/json,' + encodeURIComponent(JSON.stringify(manifest));
-      const manifestLink = document.createElement('link');
-      manifestLink.rel = 'manifest';
-      manifestLink.href = manifestDataUri;
-      document.head.appendChild(manifestLink);
-
-      // ============================================================
-      // 2.  Service Worker (using a simple inline approach)
-      // ============================================================
-      if ('serviceWorker' in navigator) {
-        try {
-          // Register a service worker from a data URI - this won't work on GitHub Pages
-          // Instead, we'll use a simpler approach: just use the Cache API directly
-          console.log('📦 Service Worker registration skipped for GitHub Pages compatibility');
-        } catch (_) { /* no-op */ }
-      }
-
-      // ============================================================
-      // 3.  Dexie database
-      // ============================================================
-      const db = new Dexie('PwaSyncMasterDB');
-      db.version(1).stores({
-        tasks: 'id, title, completed',
-        outbox: 'id, action, payload'
-      });
-
-      const listEl = document.getElementById('task-list');
-      const statusEl = document.getElementById('status');
-      const taskInput = document.getElementById('task-input');
-      const addBtn = document.getElementById('add-btn');
-
-      // ============================================================
-      // 4.  Core CRUD (with outbox)
-      // ============================================================
-      async function addTask(title) {
-        if (!title.trim()) return;
-        const newTask = {
-          id: crypto.randomUUID(),
-          title: title.trim(),
-          completed: false
+        // ============================================================
+        // 1.  PWA manifest (no blob URLs - use inline data)
+        // ============================================================
+        const manifest = {
+          name: "Dexie PWA Sync",
+          short_name: "DexieSync",
+          start_url: ".",
+          display: "standalone",
+          background_color: "#f8fafc",
+          theme_color: "#2563eb",
+          icons: [
+            {
+              src: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><circle cx='96' cy='96' r='80' fill='%232563eb'/><text x='96' y='120' font-size='70' text-anchor='middle' fill='white' font-family='sans-serif'>📋</text></svg>",
+              sizes: "192x192",
+              type: "image/svg+xml"
+            }
+          ]
         };
-        await db.transaction('rw', [db.tasks, db.outbox], async () => {
-          await db.tasks.add(newTask);
-          await db.outbox.add({
-            id: newTask.id,
-            action: 'CREATE',
-            payload: newTask
-          });
-        });
-        taskInput.value = '';
-        await renderUI();
-        triggerSync();
-      }
-
-      async function toggleTask(id) {
-        const task = await db.tasks.get(id);
-        if (!task) return;
-        const updated = { ...task, completed: !task.completed };
-        await db.transaction('rw', [db.tasks, db.outbox], async () => {
-          await db.tasks.update(id, { completed: updated.completed });
-          await db.outbox.put({
-            id,
-            action: 'UPDATE',
-            payload: { id, completed: updated.completed }
-          });
-        });
-        await renderUI();
-        triggerSync();
-      }
-
-      async function deleteTask(id) {
-        await db.transaction('rw', [db.tasks, db.outbox], async () => {
-          await db.tasks.delete(id);
-          await db.outbox.put({
-            id,
-            action: 'DELETE',
-            payload: { id }
-          });
-        });
-        await renderUI();
-        triggerSync();
-      }
-
-      // ============================================================
-      // 5.  SYNC ENGINE (public API: JSONPlaceholder)
-      // ============================================================
-      async function triggerSync() {
-        if (!navigator.onLine) {
-          updateStatus();
-          return;
-        }
-
-        const pending = await db.outbox.toArray();
-        if (pending.length === 0) {
-          updateStatus();
-          return;
-        }
-
-        statusEl.innerHTML = `⏳ Syncing ${pending.length} change${pending.length>1?'s':''} …`;
-        statusEl.className = 'status-bar';
-
-        const BASE = 'https://jsonplaceholder.typicode.com/todos';
-
-        for (const change of pending) {
-          try {
-            let url = BASE;
-            let method = 'POST';
-            let body = null;
-
-            if (change.action === 'CREATE') {
-              url = BASE;
-              method = 'POST';
-              body = JSON.stringify({
-                title: change.payload.title || 'untitled',
-                completed: change.payload.completed || false,
-                userId: 1
-              });
-            } else if (change.action === 'UPDATE') {
-              url = `${BASE}/1`;
-              method = 'PUT';
-              body = JSON.stringify({
-                id: 1,
-                title: change.payload.title || 'updated task',
-                completed: change.payload.completed || false,
-                userId: 1
-              });
-            } else if (change.action === 'DELETE') {
-              url = `${BASE}/1`;
-              method = 'DELETE';
-              body = null;
-            }
-
-            const resp = await fetch(url, {
-              method,
-              headers: { 'Content-Type': 'application/json' },
-              body: body
-            });
-
-            if (resp.ok) {
-              await db.outbox.delete(change.id);
-              console.log(`✅ Synced ${change.action} (${change.id})`);
-            } else {
-              console.warn(`⚠️ API ${resp.status} for ${change.action}`);
-            }
-          } catch (err) {
-            console.warn('⛔ Sync error:', err.message);
-            break;
-          }
-        }
-
-        await renderUI();
-        updateStatus();
-      }
-
-      // ============================================================
-      // 6.  UI RENDER
-      // ============================================================
-      async function renderUI() {
-        const tasks = await db.tasks.toArray();
-        const outboxItems = await db.outbox.toArray();
-        const outboxMap = new Map(outboxItems.map(item => [item.id, item.action]));
-
-        if (tasks.length === 0) {
-          listEl.innerHTML = `<li class="empty-message">📭 No tasks · add a new one</li>`;
-          return;
-        }
-
-        listEl.innerHTML = tasks.map(task => {
-          const pending = outboxMap.get(task.id);
-          const isCompleted = task.completed;
-          return `
-            <li>
-              <div class="task-info">
-                <span class="task-title ${isCompleted ? 'completed' : ''}">${escapeHtml(task.title)}</span>
-                ${pending ? `<span class="sync-badge">⏳ ${pending}</span>` : ''}
-              </div>
-              <div class="action-group">
-                <button class="action-btn done-btn" data-action="toggle" data-id="${task.id}">${isCompleted ? '↩️' : '✅'}</button>
-                <button class="action-btn delete-btn" data-action="delete" data-id="${task.id}">🗑️</button>
-              </div>
-            </li>
-          `;
-        }).join('');
-
-        listEl.querySelectorAll('[data-action="toggle"]').forEach(btn => {
-          btn.addEventListener('click', () => {
-            toggleTask(btn.dataset.id);
-          });
-        });
-        listEl.querySelectorAll('[data-action="delete"]').forEach(btn => {
-          btn.addEventListener('click', () => {
-            deleteTask(btn.dataset.id);
-          });
-        });
-      }
-
-      function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-      }
-
-      // ============================================================
-      // 7.  STATUS & NETWORK EVENTS
-      // ============================================================
-      function updateStatus() {
-        const online = navigator.onLine;
         
-        if (online) {
-          statusEl.innerHTML = `🟢 Online · ready`;
-          statusEl.className = 'status-bar online';
-        } else {
-          statusEl.innerHTML = `🔴 Offline · changes queued`;
-          statusEl.className = 'status-bar offline';
-        }
-      }
+        // Use data URI for manifest - works on GitHub Pages
+        const manifestDataUri = 'data:application/json,' + encodeURIComponent(JSON.stringify(manifest));
+        const manifestLink = document.createElement('link');
+        manifestLink.rel = 'manifest';
+        manifestLink.href = manifestDataUri;
+        document.head.appendChild(manifestLink);
+        console.log('📋 Manifest loaded');
 
-      function handleNetworkChange() {
-        updateStatus();
-        if (navigator.onLine) {
+        // ============================================================
+        // 2.  Service Worker - skip for GitHub Pages (blob URLs not supported)
+        // ============================================================
+        if ('serviceWorker' in navigator) {
+          console.log('ℹ️ Service Worker registration skipped (GitHub Pages compatibility)');
+        }
+
+        // ============================================================
+        // 3.  Dexie database
+        // ============================================================
+        const db = new Dexie('PwaSyncMasterDB');
+        db.version(1).stores({
+          tasks: 'id, title, completed',
+          outbox: 'id, action, payload'
+        });
+        console.log('🗄️ Database initialized');
+
+        const listEl = document.getElementById('task-list');
+        const statusEl = document.getElementById('status');
+        const taskInput = document.getElementById('task-input');
+        const addBtn = document.getElementById('add-btn');
+
+        // ============================================================
+        // 4.  Core CRUD (with outbox)
+        // ============================================================
+        async function addTask(title) {
+          if (!title.trim()) return;
+          const newTask = {
+            id: crypto.randomUUID(),
+            title: title.trim(),
+            completed: false
+          };
+          await db.transaction('rw', [db.tasks, db.outbox], async () => {
+            await db.tasks.add(newTask);
+            await db.outbox.add({
+              id: newTask.id,
+              action: 'CREATE',
+              payload: newTask
+            });
+          });
+          taskInput.value = '';
+          await renderUI();
           triggerSync();
         }
-      }
 
-      window.addEventListener('online', handleNetworkChange);
-      window.addEventListener('offline', handleNetworkChange);
-
-      // ============================================================
-      // 8.  SEED: load sample tasks from public API
-      // ============================================================
-      async function seedFromApi() {
-        if (!navigator.onLine) {
-          updateStatus();
-          return;
+        async function toggleTask(id) {
+          const task = await db.tasks.get(id);
+          if (!task) return;
+          const updated = { ...task, completed: !task.completed };
+          await db.transaction('rw', [db.tasks, db.outbox], async () => {
+            await db.tasks.update(id, { completed: updated.completed });
+            await db.outbox.put({
+              id,
+              action: 'UPDATE',
+              payload: { id, completed: updated.completed }
+            });
+          });
+          await renderUI();
+          triggerSync();
         }
-        
-        const count = await db.tasks.count();
-        if (count > 0) return;
 
-        try {
-          statusEl.innerHTML = `⏳ Loading sample tasks...`;
-          const resp = await fetch('https://jsonplaceholder.typicode.com/todos?_limit=4');
-          if (!resp.ok) throw new Error('API error');
-          const data = await resp.json();
-          const tasks = data.map(item => ({
-            id: crypto.randomUUID(),
-            title: item.title,
-            completed: item.completed
-          }));
-          await db.tasks.bulkAdd(tasks);
-          console.log('🌱 Seeded 4 sample tasks');
-        } catch (e) {
-          console.warn('Seed failed:', e.message);
-          // Add a default task so UI isn't empty
-          await db.tasks.add({
-            id: crypto.randomUUID(),
-            title: 'Welcome! Add your first task',
-            completed: false
+        async function deleteTask(id) {
+          await db.transaction('rw', [db.tasks, db.outbox], async () => {
+            await db.tasks.delete(id);
+            await db.outbox.put({
+              id,
+              action: 'DELETE',
+              payload: { id }
+            });
+          });
+          await renderUI();
+          triggerSync();
+        }
+
+        // ============================================================
+        // 5.  SYNC ENGINE (public API: JSONPlaceholder)
+        // ============================================================
+        async function triggerSync() {
+          if (!navigator.onLine) {
+            updateStatus();
+            return;
+          }
+
+          const pending = await db.outbox.toArray();
+          if (pending.length === 0) {
+            updateStatus();
+            return;
+          }
+
+          statusEl.innerHTML = `⏳ Syncing ${pending.length} change${pending.length>1?'s':''} …`;
+          statusEl.className = 'status-bar';
+
+          const BASE = 'https://jsonplaceholder.typicode.com/todos';
+
+          for (const change of pending) {
+            try {
+              let url = BASE;
+              let method = 'POST';
+              let body = null;
+
+              if (change.action === 'CREATE') {
+                url = BASE;
+                method = 'POST';
+                body = JSON.stringify({
+                  title: change.payload.title || 'untitled',
+                  completed: change.payload.completed || false,
+                  userId: 1
+                });
+              } else if (change.action === 'UPDATE') {
+                url = `${BASE}/1`;
+                method = 'PUT';
+                body = JSON.stringify({
+                  id: 1,
+                  title: change.payload.title || 'updated task',
+                  completed: change.payload.completed || false,
+                  userId: 1
+                });
+              } else if (change.action === 'DELETE') {
+                url = `${BASE}/1`;
+                method = 'DELETE';
+                body = null;
+              }
+
+              const resp = await fetch(url, {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: body
+              });
+
+              if (resp.ok) {
+                await db.outbox.delete(change.id);
+                console.log(`✅ Synced ${change.action} (${change.id})`);
+              } else {
+                console.warn(`⚠️ API ${resp.status} for ${change.action}`);
+              }
+            } catch (err) {
+              console.warn('⛔ Sync error:', err.message);
+              break;
+            }
+          }
+
+          await renderUI();
+          updateStatus();
+        }
+
+        // ============================================================
+        // 6.  UI RENDER
+        // ============================================================
+        async function renderUI() {
+          const tasks = await db.tasks.toArray();
+          const outboxItems = await db.outbox.toArray();
+          const outboxMap = new Map(outboxItems.map(item => [item.id, item.action]));
+
+          if (tasks.length === 0) {
+            listEl.innerHTML = `<li class="empty-message">📭 No tasks · add a new one</li>`;
+            return;
+          }
+
+          listEl.innerHTML = tasks.map(task => {
+            const pending = outboxMap.get(task.id);
+            const isCompleted = task.completed;
+            return `
+              <li>
+                <div class="task-info">
+                  <span class="task-title ${isCompleted ? 'completed' : ''}">${escapeHtml(task.title)}</span>
+                  ${pending ? `<span class="sync-badge">⏳ ${pending}</span>` : ''}
+                </div>
+                <div class="action-group">
+                  <button class="action-btn done-btn" data-action="toggle" data-id="${task.id}">${isCompleted ? '↩️' : '✅'}</button>
+                  <button class="action-btn delete-btn" data-action="delete" data-id="${task.id}">🗑️</button>
+                </div>
+              </li>
+            `;
+          }).join('');
+
+          listEl.querySelectorAll('[data-action="toggle"]').forEach(btn => {
+            btn.addEventListener('click', () => {
+              toggleTask(btn.dataset.id);
+            });
+          });
+          listEl.querySelectorAll('[data-action="delete"]').forEach(btn => {
+            btn.addEventListener('click', () => {
+              deleteTask(btn.dataset.id);
+            });
           });
         }
-        updateStatus();
-      }
 
-      // ============================================================
-      // 9.  INIT
-      // ============================================================
-      addBtn.addEventListener('click', async () => {
-        await addTask(taskInput.value);
-      });
-      taskInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          addBtn.click();
+        function escapeHtml(text) {
+          const div = document.createElement('div');
+          div.textContent = text;
+          return div.innerHTML;
         }
-      });
 
-      try {
+        // ============================================================
+        // 7.  STATUS & NETWORK EVENTS
+        // ============================================================
+        function updateStatus() {
+          const online = navigator.onLine;
+          
+          if (online) {
+            statusEl.innerHTML = `🟢 Online · ready`;
+            statusEl.className = 'status-bar online';
+          } else {
+            statusEl.innerHTML = `🔴 Offline · changes queued`;
+            statusEl.className = 'status-bar offline';
+          }
+        }
+
+        function handleNetworkChange() {
+          updateStatus();
+          if (navigator.onLine) {
+            triggerSync();
+          }
+        }
+
+        window.addEventListener('online', handleNetworkChange);
+        window.addEventListener('offline', handleNetworkChange);
+
+        // ============================================================
+        // 8.  SEED: load sample tasks from public API
+        // ============================================================
+        async function seedFromApi() {
+          if (!navigator.onLine) {
+            updateStatus();
+            return;
+          }
+          
+          const count = await db.tasks.count();
+          if (count > 0) return;
+
+          try {
+            statusEl.innerHTML = `⏳ Loading sample tasks...`;
+            const resp = await fetch('https://jsonplaceholder.typicode.com/todos?_limit=4');
+            if (!resp.ok) throw new Error('API error');
+            const data = await resp.json();
+            const tasks = data.map(item => ({
+              id: crypto.randomUUID(),
+              title: item.title,
+              completed: item.completed
+            }));
+            await db.tasks.bulkAdd(tasks);
+            console.log('🌱 Seeded 4 sample tasks');
+          } catch (e) {
+            console.warn('Seed failed:', e.message);
+            // Add a default task so UI isn't empty
+            await db.tasks.add({
+              id: crypto.randomUUID(),
+              title: 'Welcome! Add your first task',
+              completed: false
+            });
+          }
+          updateStatus();
+        }
+
+        // ============================================================
+        // 9.  INIT
+        // ============================================================
+        addBtn.addEventListener('click', async () => {
+          await addTask(taskInput.value);
+        });
+        taskInput.addEventListener('keypress', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            addBtn.click();
+          }
+        });
+
+        console.log('🚀 Initializing app...');
         await seedFromApi();
         await renderUI();
         updateStatus();
+        console.log('✅ App ready');
         
         // Check for pending outbox items and sync
         const pending = await db.outbox.toArray();
         if (pending.length > 0 && navigator.onLine) {
           setTimeout(triggerSync, 500);
         }
+
+        // Expose functions globally for debugging
+        window.addTask = addTask;
+        window.toggleTask = toggleTask;
+        window.deleteTask = deleteTask;
+        window.triggerSync = triggerSync;
+
       } catch (err) {
-        console.error('Init error:', err);
-        statusEl.innerHTML = `⚠️ Error: ${err.message}`;
-        statusEl.className = 'status-bar offline';
+        console.error('❌ Fatal error:', err);
+        document.getElementById('status').innerHTML = `⚠️ Error: ${err.message}`;
+        document.getElementById('status').className = 'status-bar offline';
+        document.getElementById('task-list').innerHTML = 
+          `<li class="empty-message">❌ Failed to load: ${err.message}</li>`;
       }
-
-      // Expose functions globally for debugging
-      window.addTask = addTask;
-      window.toggleTask = toggleTask;
-      window.deleteTask = deleteTask;
-      window.triggerSync = triggerSync;
-
     })();
   </script>
 </body>
