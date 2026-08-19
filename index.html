@@ -22,7 +22,7 @@
 
     /* ===== SIDEBAR ===== */
     .sidebar {
-      width: 320px;
+      width: 340px;
       background: #1a2332;
       color: #e8edf5;
       padding: 24px 20px;
@@ -34,19 +34,19 @@
       border-right: 3px solid #2d3b52;
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 14px;
     }
     .sidebar h2 {
       font-size: 1.2rem;
       color: #7bb3ff;
       border-bottom: 2px solid #2d3b52;
       padding-bottom: 10px;
-      margin-bottom: 4px;
+      margin-bottom: 2px;
     }
     .sidebar h3 {
       font-size: 0.95rem;
       color: #a8c8ff;
-      margin-top: 8px;
+      margin-top: 6px;
       margin-bottom: 4px;
     }
     .sidebar p, .sidebar li {
@@ -56,15 +56,15 @@
     }
     .sidebar ul {
       padding-left: 18px;
-      margin: 4px 0 8px 0;
+      margin: 4px 0 6px 0;
     }
     .sidebar li {
-      margin-bottom: 4px;
+      margin-bottom: 3px;
     }
     .sidebar .code-block {
       background: #0d1520;
       border-radius: 8px;
-      padding: 10px 12px;
+      padding: 8px 12px;
       font-family: 'Courier New', monospace;
       font-size: 0.75rem;
       color: #b8d4ff;
@@ -94,6 +94,7 @@
       text-align: center;
       line-height: 20px;
       margin-right: 6px;
+      flex-shrink: 0;
     }
     .sidebar .highlight {
       color: #ffd966;
@@ -107,16 +108,50 @@
     .sidebar .cyan {
       color: #76d7e6;
     }
+    .sidebar .orange {
+      color: #f5b041;
+    }
     .sidebar .dev-tools-tip {
       background: #0d1520;
       border-radius: 8px;
       padding: 12px 14px;
       border-left: 3px solid #f28b82;
-      margin-top: 8px;
+      margin-top: 4px;
     }
     .sidebar .dev-tools-tip code {
       color: #ffd966;
       font-size: 0.8rem;
+    }
+    .sidebar .step-box {
+      background: #0d1520;
+      border-radius: 8px;
+      padding: 10px 14px;
+      border-left: 3px solid #7bb3ff;
+      margin: 3px 0;
+    }
+    .sidebar .step-box .step-title {
+      color: #7bb3ff;
+      font-weight: 600;
+      font-size: 0.85rem;
+    }
+    .sidebar .step-box .step-desc {
+      color: #c8d6e8;
+      font-size: 0.8rem;
+      margin-top: 2px;
+    }
+    .sidebar .step-box .step-code {
+      background: #0a0f18;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.7rem;
+      color: #b8d4ff;
+      margin-top: 3px;
+      display: inline-block;
+    }
+    .sidebar .divider {
+      border-top: 1px solid #2d3b52;
+      margin: 4px 0;
     }
 
     /* ===== MAIN CONTENT ===== */
@@ -168,6 +203,11 @@
       background: #fee9e7;
       color: #9b2c2c;
       border-left: 4px solid #d45a5a;
+    }
+    .syncing {
+      background: #fef5d9;
+      color: #886a1b;
+      border-left: 4px solid #f5b041;
     }
     .input-group {
       display: flex;
@@ -323,7 +363,7 @@
         border-right: none;
         border-bottom: 3px solid #2d3b52;
         padding: 16px;
-        max-height: 400px;
+        max-height: 450px;
         overflow-y: auto;
       }
       .main-content {
@@ -332,7 +372,6 @@
       }
     }
 
-    /* Scrollbar styling */
     .sidebar::-webkit-scrollbar {
       width: 6px;
     }
@@ -349,64 +388,75 @@
 
   <!-- ===== SIDEBAR ===== -->
   <div class="sidebar">
-    <h2>🔧 How It Works</h2>
-    <p style="font-size:0.8rem; color:#9ab0cc;">Open DevTools (F12) to see Dexie in action!</p>
+    <h2>🧪 Test Offline → Online</h2>
+    <p style="font-size:0.8rem; color:#9ab0cc;">Follow these steps using Chrome DevTools</p>
 
-    <div>
-      <h3>📦 1. Dexie Database</h3>
-      <p>Two tables are created:</p>
-      <ul>
-        <li><span class="badge">tasks</span> Stores your to-do items</li>
-        <li><span class="badge">outbox</span> Tracks pending sync changes</li>
-      </ul>
-      <div class="code-block">db.tasks → { id, title, completed }<br>db.outbox → { id, action, payload }</div>
+    <div class="step-box">
+      <div class="step-title">Step 1: Open DevTools</div>
+      <div class="step-desc">Press <span class="highlight">F12</span> or right-click → Inspect</div>
+      <div class="step-code">⌨️ F12 or Ctrl+Shift+I</div>
     </div>
 
-    <div>
-      <h3>🔄 2. Sync Flow</h3>
-      <ul>
-        <li><span class="step-number">1</span> Add/Edit/Delete → saved to <span class="highlight">tasks</span></li>
-        <li><span class="step-number">2</span> Change recorded in <span class="highlight">outbox</span></li>
-        <li><span class="step-number">3</span> When online → sends to API</li>
-        <li><span class="step-number">4</span> Success → removes from <span class="highlight">outbox</span></li>
-      </ul>
+    <div class="step-box">
+      <div class="step-title">Step 2: Go to Network Tab</div>
+      <div class="step-desc">Click <span class="cyan">Network</span> tab at the top</div>
+      <div class="step-code">📡 Network tab → check "Offline"</div>
     </div>
 
+    <div class="step-box">
+      <div class="step-title">Step 3: Enable Offline Mode</div>
+      <div class="step-desc">Check the <span class="orange">"Offline"</span> checkbox</div>
+      <div class="step-code">☑️ Offline (simulate offline)</div>
+      <div class="step-desc" style="margin-top:4px; color:#f28b82;">🔴 Status bar will show "Offline"</div>
+    </div>
+
+    <div class="step-box">
+      <div class="step-title">Step 4: Add/Edit Tasks Offline</div>
+      <div class="step-desc">Add tasks while offline → they show <span class="highlight">⏳ PENDING</span></div>
+      <div class="step-code">📝 Tasks saved to Dexie, waiting to sync</div>
+    </div>
+
+    <div class="step-box">
+      <div class="step-title">Step 5: Check Outbox (Console)</div>
+      <div class="step-desc">In Console tab, type: <span class="cyan">db.outbox.toArray()</span></div>
+      <div class="step-code">📦 See pending changes in outbox</div>
+    </div>
+
+    <div class="step-box">
+      <div class="step-title">Step 6: Go Back Online</div>
+      <div class="step-desc">Uncheck <span class="orange">"Offline"</span> in Network tab</div>
+      <div class="step-code">✅ Auto-sync triggers → pending cleared</div>
+      <div class="step-desc" style="margin-top:4px; color:#6fcf97;">🟢 Status bar shows "Online"</div>
+    </div>
+
+    <div class="step-box">
+      <div class="step-title">Step 7: Verify Sync Complete</div>
+      <div class="step-desc">Check <span class="cyan">Console</span> for "✅ Synced" messages</div>
+      <div class="step-code">📋 Tasks now synced to API!</div>
+      <div class="step-desc" style="margin-top:4px;">💡 Pending badges disappear</div>
+    </div>
+
+    <div class="divider"></div>
+
     <div>
-      <h3>🌐 3. Public API</h3>
-      <p>Uses <span class="cyan">jsonplaceholder.typicode.com</span></p>
+      <h3>🔧 DevTools Commands</h3>
       <ul>
-        <li><span class="green">POST</span> /todos → CREATE</li>
-        <li><span class="green">PUT</span> /todos/1 → UPDATE</li>
-        <li><span class="pink">DELETE</span> /todos/1 → DELETE</li>
+        <li><code style="color:#ffd966;">db.tasks.toArray()</code> → view all tasks</li>
+        <li><code style="color:#ffd966;">db.outbox.toArray()</code> → view pending syncs</li>
+        <li><code style="color:#ffd966;">triggerSync()</code> → manual sync</li>
+        <li><code style="color:#ffd966;">db.tasks.delete(id)</code> → delete task</li>
       </ul>
     </div>
 
     <div class="dev-tools-tip">
-      <h3 style="margin-top:0; color:#f28b82;">🔍 DevTools Steps</h3>
-      <ul style="margin-top:4px;">
-        <li><strong>1. Open Console</strong> <code>F12 → Console</code></li>
-        <li><strong>2. View Database</strong> <code>db.tasks.toArray()</code></li>
-        <li><strong>3. Check Outbox</strong> <code>db.outbox.toArray()</code></li>
-        <li><strong>4. Manual Sync</strong> <code>triggerSync()</code></li>
-        <li><strong>5. Application Tab</strong> → IndexedDB → see tables</li>
+      <h3 style="margin-top:0; color:#f28b82;">💡 Pro Tip</h3>
+      <p style="font-size:0.8rem;">Watch the <span class="highlight">Console</span> logs to see:</p>
+      <ul style="margin-top:2px;">
+        <li>📝 When tasks are added</li>
+        <li>🔄 When sync starts</li>
+        <li>✅ When sync completes</li>
+        <li>⚠️ If any errors occur</li>
       </ul>
-    </div>
-
-    <div>
-      <h3>📊 Status Indicators</h3>
-      <ul>
-        <li><span class="green">🟢 Online</span> → sync ready</li>
-        <li><span class="pink">🔴 Offline</span> → changes queued</li>
-        <li><span class="highlight">⏳ Syncing</span> → sending to API</li>
-        <li><span class="cyan">⏳ Pending</span> → waiting to sync</li>
-      </ul>
-    </div>
-
-    <div style="border-top:1px solid #2d3b52; padding-top:12px; margin-top:4px;">
-      <p style="font-size:0.75rem; color:#6b7f9e;">
-        💡 Try: Add a task, go offline (toggle network), add more, then go online to see sync!
-      </p>
     </div>
   </div>
 
@@ -452,7 +502,11 @@
       try {
         await waitForDexie(15);
         console.log('✅ Dexie loaded successfully');
-        console.log('%c📚 Dexie DB ready! Try: db.tasks.toArray()', 'font-size:14px; color:#7bb3ff;');
+        console.log('%c📚 Dexie DB ready!', 'font-size:14px; color:#7bb3ff;');
+        console.log('%c💡 Try these commands in Console:', 'font-size:13px; color:#ffd966;');
+        console.log('  • db.tasks.toArray()  → view all tasks');
+        console.log('  • db.outbox.toArray() → view pending syncs');
+        console.log('  • triggerSync()       → manually trigger sync');
 
         // ============================================================
         // PWA manifest (data URI - works on GitHub Pages)
@@ -477,7 +531,6 @@
         manifestLink.rel = 'manifest';
         manifestLink.href = manifestDataUri;
         document.head.appendChild(manifestLink);
-        console.log('📋 Manifest loaded');
 
         // ============================================================
         // 3.  Dexie database
@@ -488,7 +541,6 @@
           outbox: 'id, action, payload'
         });
         console.log('🗄️ Database initialized');
-        console.log('%c💡 Try: db.tasks.toArray() or db.outbox.toArray()', 'font-size:13px; color:#ffd966;');
 
         // Expose db globally for DevTools
         window.db = db;
@@ -571,7 +623,7 @@
 
           console.log(`🔄 Syncing ${pending.length} change(s)...`);
           statusEl.innerHTML = `⏳ Syncing ${pending.length} change${pending.length>1?'s':''} …`;
-          statusEl.className = 'status-bar';
+          statusEl.className = 'status-bar syncing';
 
           const BASE = 'https://jsonplaceholder.typicode.com/todos';
 
@@ -689,7 +741,11 @@
         }
 
         function handleNetworkChange() {
-          console.log(`🌐 Network: ${navigator.onLine ? 'ONLINE' : 'OFFLINE'}`);
+          const status = navigator.onLine ? 'ONLINE' : 'OFFLINE';
+          console.log(`🌐 Network: ${status}`);
+          if (navigator.onLine) {
+            console.log('🔄 Auto-sync triggered by going online!');
+          }
           updateStatus();
           if (navigator.onLine) {
             triggerSync();
@@ -752,11 +808,7 @@
         await renderUI();
         updateStatus();
         console.log('✅ App ready!');
-        console.log('%c📖 DevTools Tips:', 'font-size:15px; font-weight:bold; color:#7bb3ff;');
-        console.log('  • db.tasks.toArray()  → view all tasks');
-        console.log('  • db.outbox.toArray() → view pending syncs');
-        console.log('  • triggerSync()       → manually trigger sync');
-        console.log('  • Application tab → IndexedDB → see tables');
+        console.log('%c📖 Follow the sidebar steps to test offline mode!', 'font-size:14px; font-weight:bold; color:#7bb3ff;');
 
         // Check for pending outbox items and sync
         const pending = await db.outbox.toArray();
