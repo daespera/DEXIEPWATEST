@@ -2,205 +2,568 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dexie Offline PWA</title>
-  <link id="manifest-link" rel="manifest">
-  <script src="https://unpkg.com"></script>
-
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+  <title>Dexie · PWA Sync</title>
+  <link rel="manifest" href="manifest.json">
+  <!-- Dexie from CDN -->
+  <script src="https://unpkg.com/dexie@4.0.8/dist/dexie.js"></script>
   <style>
-    body { font-family: sans-serif; max-width: 500px; margin: 20px auto; padding: 0 15px; background: #f3f4f6; }
-    .status-bar { padding: 10px; border-radius: 6px; text-align: center; margin-bottom: 15px; font-weight: bold; }
-    .online { background: #d1fae5; color: #065f46; }
-    .offline { background: #fee2e2; color: #991b1b; }
-    .input-group { display: flex; gap: 10px; margin-bottom: 15px; }
-    input { flex: 1; padding: 12px; border: 1px solid #d1d5db; border-radius: 6px; }
-    button { padding: 12px; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; }
-    li { background: white; padding: 14px; margin-bottom: 8px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; }
-    .completed { text-decoration: line-through; color: #9ca3af; }
-    .sync-badge { font-size: 11px; padding: 2px 6px; background: #fef3c7; color: #92400e; border-radius: 4px; }
-    .action-group { display: flex; gap: 6px; }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      max-width: 520px;
+      margin: 20px auto;
+      padding: 0 16px 40px;
+      background: #f8fafc;
+      color: #0b1b2f;
+    }
+    h1 {
+      font-weight: 600;
+      font-size: 1.8rem;
+      letter-spacing: -0.3px;
+      margin: 0.2rem 0 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    h1 small {
+      font-size: 0.9rem;
+      font-weight: 400;
+      color: #3b5d8c;
+      background: #e9edf4;
+      padding: 0.1rem 0.7rem;
+      border-radius: 40px;
+    }
+    .status-bar {
+      padding: 12px 14px;
+      border-radius: 16px;
+      text-align: center;
+      margin-bottom: 20px;
+      font-weight: 500;
+      background: #e5e9f0;
+      color: #1a2a44;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      border: 1px solid rgba(0,0,0,0.03);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+    }
+    .online {
+      background: #d5f0e6;
+      color: #0b4f3b;
+      border-left: 4px solid #1e9b6e;
+    }
+    .offline {
+      background: #fee9e7;
+      color: #9b2c2c;
+      border-left: 4px solid #d45a5a;
+    }
+    .input-group {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+    input {
+      flex: 1;
+      padding: 14px 16px;
+      border: 1px solid #d7dde7;
+      border-radius: 40px;
+      font-size: 1rem;
+      background: white;
+      transition: 0.2s;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+    }
+    input:focus {
+      outline: none;
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+    }
+    button {
+      padding: 12px 22px;
+      background: #2563eb;
+      color: white;
+      font-weight: 600;
+      border: none;
+      border-radius: 40px;
+      cursor: pointer;
+      font-size: 0.95rem;
+      transition: 0.15s;
+      white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
+    }
+    button:hover {
+      background: #1d4ed8;
+      transform: scale(0.98);
+    }
+    button:active {
+      background: #1a3f9e;
+    }
+    .action-btn {
+      background: #eef2f6;
+      color: #1f2a44;
+      box-shadow: none;
+      padding: 6px 14px;
+      font-size: 0.8rem;
+      border-radius: 30px;
+      font-weight: 500;
+    }
+    .action-btn:hover {
+      background: #dce3ec;
+    }
+    .delete-btn {
+      background: #fee9e7;
+      color: #b13e3e;
+    }
+    .delete-btn:hover {
+      background: #fcd4d0;
+    }
+    .done-btn {
+      background: #dff0e6;
+      color: #126e4b;
+    }
+    .done-btn:hover {
+      background: #c7e3d4;
+    }
+    ul {
+      list-style: none;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    li {
+      background: white;
+      padding: 14px 16px;
+      border-radius: 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border: 1px solid #eaeef4;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.02);
+      transition: 0.1s;
+    }
+    li:hover {
+      border-color: #cdd9e9;
+    }
+    .task-info {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      flex: 1;
+      margin-right: 10px;
+      word-break: break-word;
+    }
+    .task-title {
+      font-weight: 500;
+      font-size: 1rem;
+    }
+    .completed .task-title {
+      text-decoration: line-through;
+      color: #8b9bb5;
+    }
+    .sync-badge {
+      font-size: 0.7rem;
+      background: #fef5d9;
+      color: #886a1b;
+      padding: 2px 10px;
+      border-radius: 30px;
+      display: inline-block;
+      width: fit-content;
+      font-weight: 500;
+      letter-spacing: 0.2px;
+      border: 1px solid #f7e5b0;
+    }
+    .action-group {
+      display: flex;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .empty-message {
+      background: #f1f4f9;
+      border-radius: 40px;
+      padding: 28px 20px;
+      text-align: center;
+      color: #4f688b;
+      font-size: 0.95rem;
+      border: 1px dashed #cbd5e1;
+    }
+    .footer-note {
+      margin-top: 24px;
+      font-size: 0.8rem;
+      color: #6b7f9e;
+      text-align: center;
+      border-top: 1px solid #e2e8f0;
+      padding-top: 18px;
+    }
   </style>
 </head>
 <body>
 
-  <h1>Task Manager PWA</h1>
-  <div id="status" class="status-bar online">Checking connection...</div>
+  <h1>📋 Task Sync <small>dexie + PWA</small></h1>
+  <div id="status" class="status-bar">🔄 Initializing...</div>
 
   <div class="input-group">
-    <input type="text" id="task-input" placeholder="Add a new task...">
-    <button id="add-btn">Add Task</button>
+    <input type="text" id="task-input" placeholder="Write a task …" autocomplete="off">
+    <button id="add-btn">➕ Add</button>
   </div>
 
-  <ul id="task-list"></ul>
+  <ul id="task-list">
+    <li class="empty-message">⏳ Loading tasks...</li>
+  </ul>
+  <div class="footer-note">🔄 syncs automatically when online · public API (typicode)</div>
 
   <script>
-    // ==========================================
-    // 1. GENERATE PWA FILES IN MEMORY
-    // ==========================================
-    const manifestJson = {
-      name: "Dexie Sync App", short_name: "DexieSync", start_url: ".", display: "standalone",
-      background_color: "#f3f4f6", theme_color: "#2563eb",
-      icons: [{ src: "data:image/svg+xml;utf8,<svg xmlns='http://w3.org' width='192' height='192'><circle cx='96' cy='96' r='80' fill='%232563eb'/></svg>", sizes: "192x192", type: "image/svg+xml" }]
-    };
-    document.getElementById('manifest-link').href = URL.createObjectURL(new Blob([JSON.stringify(manifestJson)], { type: 'application/json' }));
-
-    const swCode = `
-      self.addEventListener('install', e => e.waitUntil(caches.open('v1').then(c => c.addAll(['/', '/index.html', 'https://unpkg.com']))));
-      self.addEventListener('fetch', e => {
-        if (!e.request.url.includes('jsonplaceholder')) {
-          e.respondWith(caches.match(e.request).then(res => res || fetch(e.request)));
+    // ============================================================
+    // Wait for Dexie to load
+    // ============================================================
+    function waitForDexie() {
+      return new Promise((resolve) => {
+        if (typeof Dexie !== 'undefined') {
+          resolve();
+        } else {
+          const checkInterval = setInterval(() => {
+            if (typeof Dexie !== 'undefined') {
+              clearInterval(checkInterval);
+              resolve();
+            }
+          }, 100);
         }
       });
-    `;
-    if ('serviceWorker' in navigator) navigator.serviceWorker.register(URL.createObjectURL(new Blob([swCode], { type: 'application/javascript' })));
-
-    // ==========================================
-    // 2. DEXIE DATABASE SETUP
-    // ==========================================
-    const db = new Dexie('PwaSyncMasterDB');
-    db.version(1).stores({ tasks: 'id, title, completed', outbox: 'id, action, payload' });
-
-    const listElement = document.getElementById('task-list');
-    const statusElement = document.getElementById('status');
-    const taskInput = document.getElementById('task-input');
-    const addButton = document.getElementById('add-btn');
-
-    // ==========================================
-    // 3. ACTIONS (ADD / TOGGLE / DELETE)
-    // ==========================================
-    async function handleAddTask() {
-      if (!taskInput.value.trim()) return;
-      const newTask = { id: crypto.randomUUID(), title: taskInput.value.trim(), completed: false };
-      await db.transaction('rw', [db.tasks, db.outbox], async () => {
-        await db.tasks.add(newTask);
-        await db.outbox.add({ id: newTask.id, action: 'CREATE', payload: newTask });
-      });
-      taskInput.value = '';
-      await refreshUI();
-      triggerSync();
     }
 
-    async function handleToggleTask(id) {
-      const task = await db.tasks.get(id);
-      if (!task) return;
-      await db.transaction('rw', [db.tasks, db.outbox], async () => {
-        await db.tasks.update(id, { completed: !task.completed });
-        await db.outbox.put({ id, action: 'UPDATE', payload: { id, completed: !task.completed } });
-      });
-      await refreshUI();
-      triggerSync();
-    }
+    (async function main() {
+      // Wait for Dexie to be available
+      await waitForDexie();
 
-    async function handleDeleteTask(id) {
-      await db.transaction('rw', [db.tasks, db.outbox], async () => {
-        await db.tasks.delete(id);
-        await db.outbox.put({ id, action: 'DELETE', payload: { id } });
-      });
-      await refreshUI();
-      triggerSync();
-    }
-
-    // ==========================================
-    // 4. AUTOMATIC BACKEND SYNC (YOUR SNIPPET LIVES HERE!)
-    // ==========================================
-    async function triggerSync() {
-      if (!navigator.onLine) return;
-
-      const pendingChanges = await db.outbox.toArray();
-      if (pendingChanges.length === 0) return;
-
-      statusElement.textContent = `🔄 Syncing ${pendingChanges.length} local edits to backend...`;
-
-      for (const change of pendingChanges) {
-        try {
-          let url = 'https://typicode.com';
-          let method = 'POST';
-
-          if (change.action === 'UPDATE') {
-            url = 'https://typicode.com/1'; 
-            method = 'PUT';
-          } else if (change.action === 'DELETE') {
-            url = 'https://typicode.com/1'; 
-            method = 'DELETE';
+      // ============================================================
+      // 1.  PWA manifest (using relative path for GitHub Pages)
+      // ============================================================
+      // Create manifest dynamically as a data URI (works on GitHub Pages)
+      const manifest = {
+        name: "Dexie PWA Sync",
+        short_name: "DexieSync",
+        start_url: ".",
+        display: "standalone",
+        background_color: "#f8fafc",
+        theme_color: "#2563eb",
+        icons: [
+          {
+            src: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><circle cx='96' cy='96' r='80' fill='%232563eb'/><text x='96' y='120' font-size='70' text-anchor='middle' fill='white' font-family='sans-serif'>📋</text></svg>",
+            sizes: "192x192",
+            type: "image/svg+xml"
           }
+        ]
+      };
+      
+      // Use a data URI for the manifest (works on GitHub Pages)
+      const manifestDataUri = 'data:application/json,' + encodeURIComponent(JSON.stringify(manifest));
+      const manifestLink = document.createElement('link');
+      manifestLink.rel = 'manifest';
+      manifestLink.href = manifestDataUri;
+      document.head.appendChild(manifestLink);
 
-          const response = await fetch(url, {
-            method: method,
-            headers: { 'Content-Type': 'application/json' },
-            body: change.action === 'DELETE' ? null : JSON.stringify(change.payload)
+      // ============================================================
+      // 2.  Service Worker (using a simple inline approach)
+      // ============================================================
+      if ('serviceWorker' in navigator) {
+        try {
+          // Register a service worker from a data URI - this won't work on GitHub Pages
+          // Instead, we'll use a simpler approach: just use the Cache API directly
+          console.log('📦 Service Worker registration skipped for GitHub Pages compatibility');
+        } catch (_) { /* no-op */ }
+      }
+
+      // ============================================================
+      // 3.  Dexie database
+      // ============================================================
+      const db = new Dexie('PwaSyncMasterDB');
+      db.version(1).stores({
+        tasks: 'id, title, completed',
+        outbox: 'id, action, payload'
+      });
+
+      const listEl = document.getElementById('task-list');
+      const statusEl = document.getElementById('status');
+      const taskInput = document.getElementById('task-input');
+      const addBtn = document.getElementById('add-btn');
+
+      // ============================================================
+      // 4.  Core CRUD (with outbox)
+      // ============================================================
+      async function addTask(title) {
+        if (!title.trim()) return;
+        const newTask = {
+          id: crypto.randomUUID(),
+          title: title.trim(),
+          completed: false
+        };
+        await db.transaction('rw', [db.tasks, db.outbox], async () => {
+          await db.tasks.add(newTask);
+          await db.outbox.add({
+            id: newTask.id,
+            action: 'CREATE',
+            payload: newTask
           });
+        });
+        taskInput.value = '';
+        await renderUI();
+        triggerSync();
+      }
 
-          if (response.ok) {
-            await db.outbox.delete(change.id);
+      async function toggleTask(id) {
+        const task = await db.tasks.get(id);
+        if (!task) return;
+        const updated = { ...task, completed: !task.completed };
+        await db.transaction('rw', [db.tasks, db.outbox], async () => {
+          await db.tasks.update(id, { completed: updated.completed });
+          await db.outbox.put({
+            id,
+            action: 'UPDATE',
+            payload: { id, completed: updated.completed }
+          });
+        });
+        await renderUI();
+        triggerSync();
+      }
+
+      async function deleteTask(id) {
+        await db.transaction('rw', [db.tasks, db.outbox], async () => {
+          await db.tasks.delete(id);
+          await db.outbox.put({
+            id,
+            action: 'DELETE',
+            payload: { id }
+          });
+        });
+        await renderUI();
+        triggerSync();
+      }
+
+      // ============================================================
+      // 5.  SYNC ENGINE (public API: JSONPlaceholder)
+      // ============================================================
+      async function triggerSync() {
+        if (!navigator.onLine) {
+          updateStatus();
+          return;
+        }
+
+        const pending = await db.outbox.toArray();
+        if (pending.length === 0) {
+          updateStatus();
+          return;
+        }
+
+        statusEl.innerHTML = `⏳ Syncing ${pending.length} change${pending.length>1?'s':''} …`;
+        statusEl.className = 'status-bar';
+
+        const BASE = 'https://jsonplaceholder.typicode.com/todos';
+
+        for (const change of pending) {
+          try {
+            let url = BASE;
+            let method = 'POST';
+            let body = null;
+
+            if (change.action === 'CREATE') {
+              url = BASE;
+              method = 'POST';
+              body = JSON.stringify({
+                title: change.payload.title || 'untitled',
+                completed: change.payload.completed || false,
+                userId: 1
+              });
+            } else if (change.action === 'UPDATE') {
+              url = `${BASE}/1`;
+              method = 'PUT';
+              body = JSON.stringify({
+                id: 1,
+                title: change.payload.title || 'updated task',
+                completed: change.payload.completed || false,
+                userId: 1
+              });
+            } else if (change.action === 'DELETE') {
+              url = `${BASE}/1`;
+              method = 'DELETE';
+              body = null;
+            }
+
+            const resp = await fetch(url, {
+              method,
+              headers: { 'Content-Type': 'application/json' },
+              body: body
+            });
+
+            if (resp.ok) {
+              await db.outbox.delete(change.id);
+              console.log(`✅ Synced ${change.action} (${change.id})`);
+            } else {
+              console.warn(`⚠️ API ${resp.status} for ${change.action}`);
+            }
+          } catch (err) {
+            console.warn('⛔ Sync error:', err.message);
+            break;
           }
-        } catch (err) {
-          console.error("Sync transmission temporarily halted for target ID:", change.id, err);
-          break; 
+        }
+
+        await renderUI();
+        updateStatus();
+      }
+
+      // ============================================================
+      // 6.  UI RENDER
+      // ============================================================
+      async function renderUI() {
+        const tasks = await db.tasks.toArray();
+        const outboxItems = await db.outbox.toArray();
+        const outboxMap = new Map(outboxItems.map(item => [item.id, item.action]));
+
+        if (tasks.length === 0) {
+          listEl.innerHTML = `<li class="empty-message">📭 No tasks · add a new one</li>`;
+          return;
+        }
+
+        listEl.innerHTML = tasks.map(task => {
+          const pending = outboxMap.get(task.id);
+          const isCompleted = task.completed;
+          return `
+            <li>
+              <div class="task-info">
+                <span class="task-title ${isCompleted ? 'completed' : ''}">${escapeHtml(task.title)}</span>
+                ${pending ? `<span class="sync-badge">⏳ ${pending}</span>` : ''}
+              </div>
+              <div class="action-group">
+                <button class="action-btn done-btn" data-action="toggle" data-id="${task.id}">${isCompleted ? '↩️' : '✅'}</button>
+                <button class="action-btn delete-btn" data-action="delete" data-id="${task.id}">🗑️</button>
+              </div>
+            </li>
+          `;
+        }).join('');
+
+        listEl.querySelectorAll('[data-action="toggle"]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            toggleTask(btn.dataset.id);
+          });
+        });
+        listEl.querySelectorAll('[data-action="delete"]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            deleteTask(btn.dataset.id);
+          });
+        });
+      }
+
+      function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+      }
+
+      // ============================================================
+      // 7.  STATUS & NETWORK EVENTS
+      // ============================================================
+      function updateStatus() {
+        const online = navigator.onLine;
+        
+        if (online) {
+          statusEl.innerHTML = `🟢 Online · ready`;
+          statusEl.className = 'status-bar online';
+        } else {
+          statusEl.innerHTML = `🔴 Offline · changes queued`;
+          statusEl.className = 'status-bar offline';
         }
       }
 
-      await refreshUI();
-      updateNetworkStatus();
-    }
-
-    // ==========================================
-    // 5. USER INTERFACE & LIFECYCLE
-    // ==========================================
-    async function refreshUI() {
-      const allTasks = await db.tasks.toArray();
-      const outboxItems = await db.outbox.toArray();
-      const actionMap = new Map(outboxItems.map(item => [item.id, item.action]));
-
-      if (allTasks.length === 0) {
-        listElement.innerHTML = `<li>No active records listed. Create one above!</li>`;
-        return;
+      function handleNetworkChange() {
+        updateStatus();
+        if (navigator.onLine) {
+          triggerSync();
+        }
       }
 
-      listElement.innerHTML = allTasks.map(task => {
-        const pendingAction = actionMap.get(task.id);
-        return `
-          <li>
-            <div>
-              <span class="${task.completed ? 'completed' : ''}">${task.title}</span>
-              ${pendingAction ? `<br><span class="sync-badge">⏳ Outbox: ${pendingAction}</span>` : ''}
-            </div>
-            <div class="action-group">
-              <button style="background:#10b981;" onclick="handleToggleTask('${task.id}')">${task.completed ? 'Undo' : 'Done'}</button>
-              <button style="background:#ef4444;" onclick="handleDeleteTask('${task.id}')">Delete</button>
-            </div>
-          </li>
-        `;
-      }).join('');
-    }
+      window.addEventListener('online', handleNetworkChange);
+      window.addEventListener('offline', handleNetworkChange);
 
-    function updateNetworkStatus() {
-      if (navigator.onLine) {
-        statusElement.textContent = "🟢 Device Connected (Live Synchronizer Running)";
-        statusElement.className = "status-bar online";
-        triggerSync();
-      } else {
-        statusElement.textContent = "🔴 Device Offline (Dexie Queues Active)";
-        statusElement.className = "status-bar offline";
-      }
-    }
+      // ============================================================
+      // 8.  SEED: load sample tasks from public API
+      // ============================================================
+      async function seedFromApi() {
+        if (!navigator.onLine) {
+          updateStatus();
+          return;
+        }
+        
+        const count = await db.tasks.count();
+        if (count > 0) return;
 
-    async function seedInitialData() {
-      if (await db.tasks.count() === 0 && navigator.onLine) {
         try {
-          const res = await fetch('https://typicode.com?_limit=3');
-          const data = await res.json();
-          await db.tasks.bulkPut(data.map(item => ({ id: crypto.randomUUID(), title: item.title, completed: item.completed })));
-          await refreshUI();
-        } catch (e) { console.warn("Seed fetch fallback blocked:", e); }
+          statusEl.innerHTML = `⏳ Loading sample tasks...`;
+          const resp = await fetch('https://jsonplaceholder.typicode.com/todos?_limit=4');
+          if (!resp.ok) throw new Error('API error');
+          const data = await resp.json();
+          const tasks = data.map(item => ({
+            id: crypto.randomUUID(),
+            title: item.title,
+            completed: item.completed
+          }));
+          await db.tasks.bulkAdd(tasks);
+          console.log('🌱 Seeded 4 sample tasks');
+        } catch (e) {
+          console.warn('Seed failed:', e.message);
+          // Add a default task so UI isn't empty
+          await db.tasks.add({
+            id: crypto.randomUUID(),
+            title: 'Welcome! Add your first task',
+            completed: false
+          });
+        }
+        updateStatus();
       }
-    }
 
-    window.addEventListener('online', updateNetworkStatus);
-    window.addEventListener('offline', updateNetworkStatus);
-    addButton.addEventListener('click', handleAddTask);
+      // ============================================================
+      // 9.  INIT
+      // ============================================================
+      addBtn.addEventListener('click', async () => {
+        await addTask(taskInput.value);
+      });
+      taskInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          addBtn.click();
+        }
+      });
 
-    updateNetworkStatus();
-    seedInitialData().then(refreshUI);
+      try {
+        await seedFromApi();
+        await renderUI();
+        updateStatus();
+        
+        // Check for pending outbox items and sync
+        const pending = await db.outbox.toArray();
+        if (pending.length > 0 && navigator.onLine) {
+          setTimeout(triggerSync, 500);
+        }
+      } catch (err) {
+        console.error('Init error:', err);
+        statusEl.innerHTML = `⚠️ Error: ${err.message}`;
+        statusEl.className = 'status-bar offline';
+      }
+
+      // Expose functions globally for debugging
+      window.addTask = addTask;
+      window.toggleTask = toggleTask;
+      window.deleteTask = deleteTask;
+      window.triggerSync = triggerSync;
+
+    })();
   </script>
 </body>
 </html>
